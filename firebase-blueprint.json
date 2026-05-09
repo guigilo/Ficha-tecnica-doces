@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A dessert product with assembly steps.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "userId", "createdAt", "updatedAt"]
+    },
+    "Step": {
+      "title": "Step",
+      "description": "A single step or layer in the dessert assembly.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "ingredient": { "type": "string" },
+        "color": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["name", "order"]
+    }
+  },
+  "firestore": {
+    "/products": {
+      "schema": "Product",
+      "description": "Collection of desserts created by users."
+    },
+    "/products/{productId}/steps": {
+      "schema": "Step",
+      "description": "Subcollection of assembly steps for a specific dessert."
+    }
+  }
+}

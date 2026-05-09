@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Auth helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    // 1. Validation Blueprints
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'userId', 'userEmail', 'createdAt', 'updatedAt'])
+        && data.keys().size() <= 10
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && data.userId == request.auth.uid
+        && data.userEmail == request.auth.token.email
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidStep(data) {
+      return data.keys().hasAll(['name', 'order'])
+        && data.keys().size() <= 10
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('ingredient' in data) || (data.ingredient is string && data.ingredient.size() <= 200))
+        && (!('color' in data) || (data.color is string && data.color.size() <= 20))
+        && data.order is number;
+    }
+
+    // 2. Collection Rules
+    match /products/{productId} {
+      allow create: if isVerified() && isValidId(productId) && isValidProduct(request.resource.data);
+      
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid);
+
+      allow update: if isVerified() && isValidId(productId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (
+          // Action: Edit Name/Description
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'description', 'updatedAt'])
+        );
+
+      allow delete: if isVerified() && isValidId(productId) && resource.data.userId == request.auth.uid;
+
+      // Subcollection: Steps
+      match /steps/{stepId} {
+        allow create: if isVerified()
+          && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid
+          && isValidStep(request.resource.data);
+        
+        allow read: if isSignedIn()
+          && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
+        
+        allow update: if isVerified()
+          && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid
+          && isValidStep(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasAny(['name', 'description', 'ingredient', 'color', 'order']);
+        
+        allow delete: if isVerified()
+          && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
+      }
+    }
+  }
+}

@@ -11,10 +11,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -25,12 +21,11 @@ service cloud.firestore {
 
     // 1. Validation Blueprints
     function isValidProduct(data) {
-      return data.keys().hasAll(['name', 'userId', 'userEmail', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['name', 'userId', 'createdAt', 'updatedAt'])
         && data.keys().size() <= 10
         && data.name is string && data.name.size() > 0 && data.name.size() <= 200
         && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
         && data.userId == request.auth.uid
-        && data.userEmail == request.auth.token.email
         && data.createdAt == request.time
         && data.updatedAt == request.time;
     }
@@ -47,12 +42,12 @@ service cloud.firestore {
 
     // 2. Collection Rules
     match /products/{productId} {
-      allow create: if isVerified() && isValidId(productId) && isValidProduct(request.resource.data);
+      allow create: if isSignedIn() && isValidId(productId) && isValidProduct(request.resource.data);
       
       allow get: if isSignedIn() && (resource.data.userId == request.auth.uid);
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid);
 
-      allow update: if isVerified() && isValidId(productId)
+      allow update: if isSignedIn() && isValidId(productId)
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
@@ -61,23 +56,23 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'description', 'updatedAt'])
         );
 
-      allow delete: if isVerified() && isValidId(productId) && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && isValidId(productId) && resource.data.userId == request.auth.uid;
 
       // Subcollection: Steps
       match /steps/{stepId} {
-        allow create: if isVerified()
+        allow create: if isSignedIn()
           && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid
           && isValidStep(request.resource.data);
         
         allow read: if isSignedIn()
           && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
         
-        allow update: if isVerified()
+        allow update: if isSignedIn()
           && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid
           && isValidStep(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasAny(['name', 'description', 'ingredient', 'color', 'order']);
         
-        allow delete: if isVerified()
+        allow delete: if isSignedIn()
           && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
       }
     }

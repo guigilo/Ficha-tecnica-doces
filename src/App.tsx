@@ -16,10 +16,9 @@ import {
   doc,
   Timestamp
 } from 'firebase/firestore';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
   Plus, 
-  LogOut, 
   CakeSlice, 
   Layers, 
   ChevronRight, 
@@ -30,7 +29,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { auth, db, loginWithGoogle, handleFirestoreError, OperationType } from './lib/firebase';
+import { auth, db, signInAnonymously, handleFirestoreError, OperationType } from './lib/firebase';
 import { Product, Step } from './types';
 import DessertDetail from './components/DessertDetail';
 import DessertForm from './components/DessertForm';
@@ -43,10 +42,19 @@ export default function App() {
   const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(u === null && u !== undefined);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setLoading(true);
+        try {
+          await signInAnonymously();
+        } catch (e) {
+          console.error("Auto login failed", e);
+          setLoading(false);
+        }
+      } else {
+        setUser(u);
+        setLoading(false);
+      }
     });
     return unsubscribe;
   }, []);
@@ -83,7 +91,6 @@ export default function App() {
         name,
         description,
         userId: user.uid,
-        userEmail: user.email,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -104,7 +111,7 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center font-sans">
         <motion.div 
@@ -112,32 +119,6 @@ export default function App() {
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
         >
           <CakeSlice size={40} className="text-text-accent" />
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-bg-primary flex flex-col items-center justify-center p-10 text-center font-sans">
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-xl"
-        >
-          <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-text-accent mb-4 block">Catálogo de Produção v1.0</span>
-          <h1 className="text-6xl font-serif font-black tracking-tight text-text-dark mb-6">Doce Camadas</h1>
-          <p className="text-xl text-text-accent mb-12 font-serif italic max-w-md mx-auto">
-            "Organize a montagem dos seus doces camada por camada, com clareza técnica e beleza geométrica."
-          </p>
-          <div className="inline-block p-1 border-2 border-border-soft">
-            <button
-              onClick={loginWithGoogle}
-              className="bg-text-dark text-white py-4 px-12 text-sm uppercase tracking-[0.2em] font-bold hover:bg-black transition-colors"
-            >
-              Começar com Google
-            </button>
-          </div>
         </motion.div>
       </div>
     );
@@ -156,16 +137,9 @@ export default function App() {
           </div>
           <div className="flex items-center gap-6">
             <div className="hidden md:block text-right">
-              <span className="text-[10px] uppercase font-bold text-text-accent block">Conectado como</span>
-              <span className="text-xs font-medium">{user.email}</span>
+              <span className="text-[10px] uppercase font-bold text-text-accent block">ID de Produção</span>
+              <span className="text-[10px] font-mono opacity-40">{user.uid.slice(0, 8)}</span>
             </div>
-            <button 
-              onClick={() => signOut(auth)}
-              className="p-3 border-2 border-border-soft hover:bg-white transition-colors"
-              title="Sair"
-            >
-              <LogOut size={18} />
-            </button>
           </div>
         </div>
       </header>
